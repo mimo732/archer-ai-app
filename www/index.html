@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ARCHER AI</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: radial-gradient(circle at 50% 42%, #07220f 0%, #030603 62%);
+        color: #7dd3a8;
+        font-family: system-ui, sans-serif;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        letter-spacing: 0.35em; text-transform: uppercase;
+      }
+      .ring {
+        width: 130px; height: 130px; border-radius: 50%;
+        border: 2px solid rgba(45, 212, 191, 0.55);
+        box-shadow: 0 0 30px rgba(45, 212, 191, 0.35), inset 0 0 22px rgba(45, 212, 191, 0.25);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 44px; font-weight: 900; color: #fbbf24;
+        animation: pulse 2.2s ease-in-out infinite;
+        margin-bottom: 26px;
+      }
+      @keyframes pulse { 50% { transform: scale(1.05); opacity: 0.85; } }
+      .label { font-size: 15px; font-weight: 700; color: #e2e8f0; }
+      .sub { font-size: 10px; margin-top: 10px; color: #7dd3a8; opacity: 0.75; }
+    </style>
+  </head>
+  <body>
+    <div class="ring">A</div>
+    <div class="label">ARCHER AI</div>
+    <div class="sub">Linking to the ARCHER brain…</div>
+    <!-- Fallback shell: the Capacitor config opens the ARCHER website directly.
+         If that config is ever removed, this page forwards to it. -->
+    <script>
+      setTimeout(function () {
+        if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.ArcherBridge) {
+          location.replace("https://preview-8cd85ce6-1016-48b5-a387-d12748b3dc31.space-z.ai");
+        }
+      }, 2500);
+    </script>
+  </body>
+</html>

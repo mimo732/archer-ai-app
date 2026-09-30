@@ -1,0 +1,41 @@
+appId: ai.archer.assistant
+productName: ARCHER AI
+copyright: ARCHER AI
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - main.js
+  - preload.js
+  - config.default.json
+  - build/icon.png
+
+# the pure-Node server core (device executors) travels with the app
+extraFiles:
+  - from: ../server/src
+    to: server-core/src
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ARCHER AI
+  artifactName: ARCHER-Setup-${version}.exe
+
+portable:
+  artifactName: ARCHER-Portable-${version}.exe
+
+# the UI comes from the website brain — no auto-update channel needed
+publish: null

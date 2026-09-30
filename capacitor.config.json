@@ -1,0 +1,13 @@
+{
+  "appId": "ai.archer.assistant",
+  "appName": "ARCHER AI",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "url": "https://preview-8cd85ce6-1016-48b5-a387-d12748b3dc31.space-z.ai",
+    "cleartext": false,
+    "allowNavigation": ["*"]
+  }
+}

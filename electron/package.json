@@ -1,0 +1,19 @@
+{
+  "name": "archer-desktop",
+  "productName": "ARCHER AI",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ARCHER AI — Windows desktop app. The full JARVIS-style assistant, linked to your ARCHER website brain.",
+  "main": "main.js",
+  "author": "ARCHER AI",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}

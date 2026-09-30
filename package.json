@@ -1,0 +1,31 @@
+{
+  "name": "archer-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ARCHER AI — JARVIS-style personal assistant. Web (Next.js) + Windows desktop (Electron) + Android (Capacitor), all connected to one brain.",
+  "workspaces": [
+    "client",
+    "server",
+    "electron"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "start": "npm run start -w client",
+    "lint": "npm run lint -w client",
+    "db:push": "npm run db:push -w client",
+    "db:generate": "npm run db:generate -w client",
+    "dist:win": "npm run dist -w electron",
+    "build:apk": "cd android && ./gradlew assembleDebug"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.9"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9"
+  }
+}

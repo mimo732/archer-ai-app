@@ -1,0 +1,16 @@
+{
+  "name": "ARCHER AI — Personal Jarvis Assistant",
+  "short_name": "ARCHER AI",
+  "description": "A Jarvis-style voice AI assistant with particle core HUD, agent actions, memory, tasks and live news.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030603",
+  "theme_color": "#030603",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

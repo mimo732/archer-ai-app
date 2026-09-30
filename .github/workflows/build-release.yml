@@ -1,0 +1,141 @@
+name: Build ARCHER AI (Windows .exe + Android .apk)
+
+# ARCHER AI — automatic release builds.
+# Every push to main builds fresh installers; pushing a tag like v1.0.0
+# (or tapping "Run workflow") also publishes them to GitHub Releases,
+# where the Settings → "Get the ARCHER Apps" buttons download from.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  # Set a repo VARIABLE named ARCHER_SERVER_URL in GitHub (Settings →
+  # Secrets and variables → Actions → Variables) to point the apps at your
+  # ARCHER website. Falls back to the URL baked in the repo.
+  ARCHER_SERVER_URL: ${{ vars.ARCHER_SERVER_URL || 'https://preview-8cd85ce6-1016-48b5-a387-d12748b3dc31.space-z.ai' }}
+
+jobs:
+  windows-exe:
+    name: Windows .exe (Electron)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bake server URL into the desktop app
+        shell: pwsh
+        run: |
+          $p = "electron/config.default.json"
+          $c = Get-Content $p -Raw | ConvertFrom-Json
+          $c.serverUrl = "$env:ARCHER_SERVER_URL"
+          $c | ConvertTo-Json -Depth 5 | Set-Content $p -Encoding UTF8
+
+      - name: Install desktop dependencies
+        working-directory: electron
+        run: npm install --no-audit --no-fund
+
+      - name: Build ARCHER-Setup.exe + portable
+        working-directory: electron
+        run: npx electron-builder --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List built artifacts
+        shell: pwsh
+        run: |
+          Get-ChildItem electron/release/*.exe | ForEach-Object {
+            Write-Host "built: $($_.Name)"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archer-windows
+          path: |
+            electron/release/ARCHER-Setup-*.exe
+            electron/release/ARCHER-Portable-*.exe
+          if-no-files-found: error
+
+  android-apk:
+    name: Android .apk (Capacitor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Bake server URL into the Android app
+        run: |
+          node -e "
+            const fs = require('fs');
+            const c = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
+            c.server.url = process.env.ARCHER_SERVER_URL;
+            fs.writeFileSync('capacitor.config.json', JSON.stringify(c, null, 2));
+          "
+          cat capacitor.config.json
+
+      - name: Install Capacitor toolchain
+        run: npm install --ignore-workspace --no-audit --no-fund
+
+      - name: Sync web assets into Android
+        run: npx cap sync android
+
+      - name: Build ARCHER.apk (debug — installable) + unsigned release
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/ARCHER.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk dist/ARCHER-release-unsigned.apk
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archer-android
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish to GitHub Releases
+    needs: [windows-exe, android-apk]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-windows
+          path: rel/win
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-android
+          path: rel/android
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rel/win/ARCHER-Setup-*.exe
+            rel/win/ARCHER-Portable-*.exe
+            rel/android/ARCHER.apk
+            rel/android/ARCHER-release-unsigned.apk
+          generate_release_notes: true
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('auto-build-{0}', github.run_number) }}
