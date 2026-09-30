@@ -93,7 +93,7 @@ public class ArcherBridgePlugin extends Plugin {
                 search.putExtra("query", query);
                 search.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 try {
-                    startActivity(search);
+                    getContext().startActivity(search);
                     JSObject out = new JSObject();
                     out.put("result", "searching YouTube for " + query);
                     call.resolve(out);
@@ -110,7 +110,7 @@ public class ArcherBridgePlugin extends Plugin {
             Intent launch = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
             if (launch != null) {
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(launch);
+                getContext().startActivity(launch);
                 call.resolve();
                 return;
             }
@@ -156,7 +156,7 @@ public class ArcherBridgePlugin extends Plugin {
             Uri uri = Uri.parse(url);
             Intent intent = new Intent(Intent.ACTION_VIEW, uri);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
+            getContext().startActivity(intent);
             call.resolve();
         } catch (Exception e) {
             call.reject("could not open: " + url);
