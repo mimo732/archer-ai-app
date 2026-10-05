@@ -6,6 +6,12 @@ on:
       - jarvis-personal-fr-v1
   workflow_dispatch:
 
+# Serialize test builds so the first run creates the signing key and every
+# following run restores exactly the same key from cache.
+concurrency:
+  group: jarvis-android-debug-signing-v2
+  cancel-in-progress: false
+
 jobs:
   android-test:
     name: JARVIS Android debug APK
@@ -29,7 +35,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: jarvis-android-debug-keystore-v1
+          key: jarvis-android-debug-keystore-v2
+
+      - name: Create signing key once when cache is empty
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair               -keystore "$HOME/.android/debug.keystore"               -storepass android               -alias androiddebugkey               -keypass android               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=JARVIS Debug,O=Personal,C=FR"
+          fi
+          keytool -list -v             -keystore "$HOME/.android/debug.keystore"             -storepass android             -alias androiddebugkey | grep -E "SHA256:|Alias name:|Valid from:"
 
       - name: Install Capacitor toolchain
         run: npm install --ignore-workspace --no-audit --no-fund
