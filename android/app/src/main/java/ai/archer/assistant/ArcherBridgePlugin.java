@@ -356,7 +356,13 @@ public class ArcherBridgePlugin extends Plugin {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language);
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            // Give the user time to dictate a complete address or a longer command.
+            // Recognition services may treat these values as hints, but Google Speech
+            // on Android generally honors them well enough for natural pauses.
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 12000L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
             speechRecognizer.startListening(intent);
         });
     }
@@ -368,6 +374,33 @@ public class ArcherBridgePlugin extends Plugin {
                 speechRecognizer.destroy();
             } catch (Exception ignored) {}
             speechRecognizer = null;
+        }
+    }
+
+    @PluginMethod
+    public void navigate(PluginCall call) {
+        String destination = call.getString("destination", "").trim();
+        if (destination.isEmpty()) {
+            call.reject("Destination manquante");
+            return;
+        }
+
+        // Prefer the native Google Maps navigation intent. If Maps is not
+        // installed, fall back to a normal HTTPS directions URL.
+        try {
+            Uri navUri = Uri.parse("google.navigation:q=" + Uri.encode(destination));
+            Intent nav = new Intent(Intent.ACTION_VIEW, navUri);
+            nav.setPackage("com.google.android.apps.maps");
+            nav.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(nav);
+            JSObject out = new JSObject();
+            out.put("destination", destination);
+            out.put("result", "navigation_started");
+            call.resolve(out);
+            return;
+        } catch (Exception ignored) {
+            String web = "https://www.google.com/maps/dir/?api=1&destination=" + Uri.encode(destination);
+            openUrlInternal(web, call);
         }
     }
 
