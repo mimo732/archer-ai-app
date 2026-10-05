@@ -38,6 +38,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Android 11+ package visibility: ARCHER needs to see which apps it can
          launch on command ("open youtube" etc.). Query launchable apps. -->
