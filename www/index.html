@@ -180,10 +180,50 @@
   let history = readJson(LS_HISTORY, []);
   let memory = readJson(LS_MEMORY, []);
 
+  let bridgeProxy = null;
+
   function bridge() {
-    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ArcherBridge
-      ? window.Capacitor.Plugins.ArcherBridge
-      : null;
+    if (bridgeProxy) return bridgeProxy;
+    const cap = window.Capacitor;
+    if (!cap) return null;
+
+    // Capacitor may expose a registered native plugin through the legacy
+    // Plugins bag, through registerPlugin(), or only through nativePromise.
+    // Support all three so the local no-bundler HTML works reliably.
+    if (cap.Plugins && cap.Plugins.ArcherBridge) {
+      bridgeProxy = cap.Plugins.ArcherBridge;
+      return bridgeProxy;
+    }
+
+    if (typeof cap.registerPlugin === "function") {
+      try {
+        bridgeProxy = cap.registerPlugin("ArcherBridge");
+        return bridgeProxy;
+      } catch (_) {}
+    }
+
+    if (typeof cap.nativePromise === "function") {
+      bridgeProxy = new Proxy({}, {
+        get: function (_target, prop) {
+          return function (options) {
+            return cap.nativePromise("ArcherBridge", String(prop), options || {});
+          };
+        }
+      });
+      return bridgeProxy;
+    }
+
+    return null;
+  }
+
+  async function waitForBridge(timeoutMs) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const b = bridge();
+      if (b) return b;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    return null;
   }
 
   function readJson(key, fallback) {
@@ -508,23 +548,30 @@
 
   window.addEventListener("load", async () => {
     renderHistory();
-    setState("idle", "Mode Android local — prêt.");
+    setState("idle", "Initialisation du pont Android…");
     if (window.speechSynthesis) {
       speechSynthesis.getVoices();
       speechSynthesis.addEventListener && speechSynthesis.addEventListener("voiceschanged", () => speechSynthesis.getVoices());
     }
-    const b = bridge();
+
+    const b = await waitForBridge(2500);
     if (!b) {
-      subtitle.textContent = "Pont Android non chargé.";
+      subtitle.textContent = "Pont Android indisponible — redémarre JARVIS.";
       return;
     }
+
     try {
+      const info = await b.deviceInfo();
+      const deviceLabel = info && info.name ? String(info.name) : "Android";
+      subtitle.textContent = "Pont Android connecté — " + deviceLabel + ".";
       const ks = await b.apiKeyStatus();
       const model = localStorage.getItem(LS_MODEL) || "";
       if (!ks.configured || !model) {
-        subtitle.textContent = "Configure OpenRouter dans Réglages pour les questions IA.";
+        subtitle.textContent = "Pont Android connecté. Configure OpenRouter pour les questions IA.";
       }
-    } catch (_) {}
+    } catch (e) {
+      subtitle.textContent = "Pont Android chargé, mais test natif en échec.";
+    }
   });
 })();
 </script>
