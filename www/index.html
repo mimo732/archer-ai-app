@@ -177,6 +177,7 @@
   const LS_USER = "jarvis_user_name";
 
   let busy = false;
+  let pendingAction = null;
   let history = readJson(LS_HISTORY, []);
   let memory = readJson(LS_MEMORY, []);
 
@@ -309,13 +310,45 @@
     const text = stripWake(raw);
     let m;
 
+    // Follow-up turn: after "ouvre Maps", JARVIS asks for the address and
+    // waits for the next voice phrase instead of opening Maps immediately.
+    if (pendingAction && pendingAction.type === "maps_destination") {
+      pendingAction = null;
+      const destination = text.trim();
+      if (!destination) {
+        return { reply: "Je n’ai pas entendu l’adresse. Réessaie.", followupListen: true };
+      }
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.navigate({ destination });
+      return { reply: "J’ouvre l’itinéraire vers " + destination + "." };
+    }
+
+    // One-shot navigation commands: "va à ...", "emmène-moi à ...",
+    // "itinéraire vers ...", "ouvre Maps vers ...".
+    m = text.match(/^(?:emmène[- ]?moi|emmene[- ]?moi|conduis[- ]?moi|va|vas|navigue|itinéraire|itineraire)(?:\s+(?:moi\s+)?)?(?:à|a|vers)\s+(.+)$/i)
+      || text.match(/^(?:ouvre|lance)\s+(?:google\s+)?maps\s+(?:à|a|vers|pour)\s+(.+)$/i);
+    if (m) {
+      const destination = m[1].trim();
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.navigate({ destination });
+      return { reply: "J’ouvre l’itinéraire vers " + destination + "." };
+    }
+
     m = text.match(/^(?:ouvre|lance|démarre|demarre)\s+(.+)$/i);
     if (m) {
       const app = normalizeApp(m[1]);
+
+      if (app === "maps") {
+        pendingAction = { type: "maps_destination" };
+        return { reply: "Bien. Quelle adresse ou quelle destination ?", followupListen: true };
+      }
+
       const b = bridge();
       if (!b) throw new Error("Pont Android indisponible");
       await b.openApp({ name: app });
-      return "J'ouvre " + m[1] + ".";
+      return { reply: "J’ouvre " + m[1] + "." };
     }
 
     m = text.match(/^(?:cherche|recherche)\s+(.+?)\s+(?:sur\s+)?youtube$/i);
@@ -389,7 +422,7 @@
     return preferred || fr[0] || voices[0] || null;
   }
 
-  function speak(text) {
+  function speak(text, onEnd) {
     if (!window.speechSynthesis || !text) {
       setState("idle");
       return;
@@ -402,8 +435,14 @@
     u.rate = 1;
     u.pitch = 1;
     u.onstart = () => setState("speaking", text);
-    u.onend = () => setState("idle", "Prêt.");
-    u.onerror = () => setState("idle", "Prêt.");
+    u.onend = () => {
+      setState("idle", "Prêt.");
+      if (typeof onEnd === "function") onEnd();
+    };
+    u.onerror = () => {
+      setState("idle", "Prêt.");
+      if (typeof onEnd === "function") onEnd();
+    };
     speechSynthesis.speak(u);
   }
 
@@ -434,10 +473,18 @@
 
     try {
       const local = await localCommand(text);
-      const reply = local !== null ? local : await askAI(stripWake(text));
+      const localObj =
+        local !== null
+          ? (typeof local === "string" ? { reply: local } : local)
+          : null;
+      const reply = localObj ? localObj.reply : await askAI(stripWake(text));
       addMessage("assistant", reply);
       subtitle.textContent = reply;
-      speak(reply);
+      speak(reply, () => {
+        if (localObj && localObj.followupListen) {
+          setTimeout(() => listen(), 350);
+        }
+      });
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
       addMessage("assistant", "Erreur : " + msg);
@@ -455,7 +502,9 @@
       setState("idle", "Pont Android indisponible.");
       return;
     }
-    setState("listening", "Je t'écoute…");
+    setState("listening", pendingAction && pendingAction.type === "maps_destination"
+      ? "Donne-moi l’adresse complète…"
+      : "Je t’écoute…");
     try {
       const out = await b.listen({ language: "fr-FR" });
       const text = out && out.text ? String(out.text).trim() : "";
