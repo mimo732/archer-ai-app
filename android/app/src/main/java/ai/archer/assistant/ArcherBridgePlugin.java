@@ -301,6 +301,7 @@ public class ArcherBridgePlugin extends Plugin {
      */
     private void startInAppRecognition(PluginCall call) {
         final String language = call.getString("language", "fr-FR");
+        final String mode = call.getString("mode", "command");
 
         getActivity().runOnUiThread(() -> {
             if (!SpeechRecognizer.isRecognitionAvailable(getContext())) {
@@ -359,12 +360,23 @@ public class ArcherBridgePlugin extends Plugin {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language);
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-            // Give the user time to dictate a complete address or a longer command.
-            // Recognition services may treat these values as hints, but Google Speech
-            // on Android generally honors them well enough for natural pauses.
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 12000L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
+
+            // Low-latency mode for normal commands; a slightly more patient mode
+            // for dictated addresses. The previous 12-second minimum could make
+            // JARVIS feel artificially slow even after the user had finished talking.
+            final boolean addressMode = "address".equalsIgnoreCase(mode);
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
+                    addressMode ? 1800L : 700L
+            );
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
+                    addressMode ? 1400L : 750L
+            );
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+                    addressMode ? 1000L : 500L
+            );
             speechRecognizer.startListening(intent);
         });
     }
