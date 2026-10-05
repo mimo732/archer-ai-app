@@ -486,8 +486,32 @@
   }
 
   function speak(text, onEnd) {
-    if (!window.speechSynthesis || !text) {
+    if (!text) {
       setState("idle");
+      if (typeof onEnd === "function") onEnd();
+      return;
+    }
+
+    const finish = () => {
+      setState("idle", "Prêt.");
+      if (typeof onEnd === "function") onEnd();
+    };
+
+    const native = bridge();
+    if (native && typeof native.speakText === "function") {
+      setState("speaking", text);
+      Promise.resolve(native.speakText({ text, language: "fr-FR" }))
+        .then(finish)
+        .catch(() => speakWithWebTts(text, finish));
+      return;
+    }
+
+    speakWithWebTts(text, finish);
+  }
+
+  function speakWithWebTts(text, onEnd) {
+    if (!window.speechSynthesis) {
+      if (typeof onEnd === "function") onEnd();
       return;
     }
     try { speechSynthesis.cancel(); } catch (_) {}
@@ -499,11 +523,9 @@
     u.pitch = 1;
     u.onstart = () => setState("speaking", text);
     u.onend = () => {
-      setState("idle", "Prêt.");
       if (typeof onEnd === "function") onEnd();
     };
     u.onerror = () => {
-      setState("idle", "Prêt.");
       if (typeof onEnd === "function") onEnd();
     };
     speechSynthesis.speak(u);
