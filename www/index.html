@@ -1,44 +1,532 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>JARVIS</title>
-    <style>
-      html, body { height: 100%; margin: 0; }
-      body {
-        background: radial-gradient(circle at 50% 42%, #07220f 0%, #030603 62%);
-        color: #7dd3a8;
-        font-family: system-ui, sans-serif;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        letter-spacing: 0.35em; text-transform: uppercase;
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#020712" />
+  <title>JARVIS</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #020712;
+      --panel: rgba(5, 18, 35, .82);
+      --line: rgba(70, 200, 255, .26);
+      --cyan: #58d7ff;
+      --cyan2: #16aef0;
+      --text: #eaf8ff;
+      --muted: #7ea5b8;
+      --danger: #ff7b91;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,sans-serif; }
+    body {
+      min-height:100dvh;
+      background:
+        radial-gradient(circle at 50% 26%, rgba(0,151,225,.20), transparent 26%),
+        radial-gradient(circle at 50% 44%, rgba(30,84,160,.12), transparent 42%),
+        linear-gradient(180deg,#020712,#02050b 70%);
+      overflow:hidden;
+    }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    .app {
+      min-height:100dvh; max-width:760px; margin:0 auto; padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));
+      display:grid; grid-template-rows:auto auto 1fr auto; gap:12px;
+    }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .brand { letter-spacing:.34em; font-size:14px; font-weight:800; color:#fff; text-shadow:0 0 14px rgba(88,215,255,.55); }
+    .pill {
+      border:1px solid var(--line); background:rgba(6,24,44,.62); color:var(--cyan);
+      padding:8px 11px; border-radius:999px; font-size:12px;
+    }
+    .coreWrap { display:flex; flex-direction:column; align-items:center; gap:10px; padding:4px 0 2px; }
+    .core {
+      width:min(48vw,190px); aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
+      border:2px solid rgba(88,215,255,.72);
+      box-shadow:0 0 24px rgba(22,174,240,.44), inset 0 0 28px rgba(22,174,240,.24);
+      transition:.25s ease;
+    }
+    .core:before,.core:after {
+      content:""; position:absolute; inset:10%; border-radius:50%; border:1px solid rgba(88,215,255,.34);
+    }
+    .core:after { inset:24%; border-color:rgba(88,215,255,.55); box-shadow:0 0 16px rgba(88,215,255,.22); }
+    .core span { font-size:52px; font-weight:900; letter-spacing:.08em; color:#c9f3ff; text-shadow:0 0 20px #16aef0; z-index:2; }
+    .core.listening { animation:pulse 1.15s ease-in-out infinite; box-shadow:0 0 44px rgba(22,174,240,.72), inset 0 0 36px rgba(22,174,240,.33); }
+    .core.thinking { animation:spinGlow 1.8s linear infinite; }
+    .core.speaking { box-shadow:0 0 46px rgba(88,215,255,.76), inset 0 0 38px rgba(88,215,255,.32); transform:scale(1.03); }
+    @keyframes pulse { 50% { transform:scale(1.045); filter:brightness(1.22); } }
+    @keyframes spinGlow { 50% { box-shadow:0 0 54px rgba(22,174,240,.82), inset 0 0 28px rgba(22,174,240,.24); } }
+    .status { color:var(--cyan); font-size:11px; letter-spacing:.28em; text-transform:uppercase; }
+    .subtitle { min-height:20px; color:#bcefff; font-size:13px; text-align:center; max-width:92%; }
+    .chat {
+      min-height:0; overflow:auto; border:1px solid var(--line); border-radius:18px; background:var(--panel);
+      padding:12px; box-shadow:inset 0 0 30px rgba(0,108,170,.08);
+    }
+    .msg { margin:8px 0; display:flex; }
+    .msg.user { justify-content:flex-end; }
+    .bubble {
+      max-width:86%; padding:10px 12px; border-radius:14px; line-height:1.35; font-size:14px; white-space:pre-wrap;
+      border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.055);
+    }
+    .user .bubble { background:rgba(20,133,198,.19); border-color:rgba(88,215,255,.24); }
+    .assistant .bubble { background:rgba(3,27,47,.82); color:#dff8ff; }
+    .composer { display:grid; grid-template-columns:48px 1fr 48px; gap:8px; align-items:center; }
+    .composer input {
+      height:48px; min-width:0; border-radius:15px; border:1px solid var(--line); outline:none;
+      padding:0 14px; color:#fff; background:rgba(4,17,31,.90);
+    }
+    .composer input:focus { border-color:rgba(88,215,255,.65); box-shadow:0 0 14px rgba(22,174,240,.16); }
+    .iconBtn {
+      width:48px; height:48px; border-radius:15px; border:1px solid var(--line); background:rgba(6,24,44,.9); color:var(--cyan);
+      display:grid; place-items:center; font-size:20px;
+    }
+    .iconBtn:disabled { opacity:.35; }
+    .modal {
+      position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.68);
+      z-index:30; padding:14px;
+    }
+    .modal.open { display:flex; }
+    .sheet {
+      width:min(100%,560px); max-height:86dvh; overflow:auto; border-radius:22px; border:1px solid var(--line);
+      background:#04101d; padding:18px; box-shadow:0 0 40px rgba(0,133,200,.18);
+    }
+    .sheet h2 { margin:0 0 6px; letter-spacing:.18em; font-size:16px; }
+    .sheet p { color:var(--muted); font-size:12px; line-height:1.45; }
+    label { display:block; margin:14px 0 6px; color:#a9dfef; font-size:12px; }
+    .sheet input {
+      width:100%; height:45px; border-radius:12px; border:1px solid var(--line); outline:none;
+      padding:0 12px; background:#020914; color:#fff;
+    }
+    .row { display:flex; gap:8px; margin-top:12px; }
+    .primary,.secondary,.danger {
+      flex:1; min-height:43px; border-radius:12px; border:1px solid var(--line); padding:8px 10px;
+    }
+    .primary { background:#16aef0; color:#001019; font-weight:800; }
+    .secondary { background:#071a2b; color:#ccefff; }
+    .danger { background:rgba(130,20,40,.18); border-color:rgba(255,123,145,.34); color:#ff9caf; }
+    .note { color:#7ea5b8; font-size:11px; margin-top:9px; }
+    .ok { color:#7ce7b3; } .warn { color:#ffc978; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">JARVIS</div>
+      <button class="pill" id="settingsBtn">⚙ RÉGLAGES</button>
+    </header>
+
+    <section class="coreWrap">
+      <button class="core" id="core" aria-label="Parler à JARVIS"><span>J</span></button>
+      <div class="status" id="status">VEILLE</div>
+      <div class="subtitle" id="subtitle">Mode Android local — prêt.</div>
+    </section>
+
+    <main class="chat" id="chat" aria-live="polite"></main>
+
+    <form class="composer" id="form">
+      <button type="button" class="iconBtn" id="micBtn" aria-label="Micro">🎙</button>
+      <input id="input" autocomplete="off" placeholder="Parle ou écris à JARVIS…" />
+      <button type="submit" class="iconBtn" id="sendBtn" aria-label="Envoyer">➤</button>
+    </form>
+  </div>
+
+  <div class="modal" id="settingsModal">
+    <div class="sheet">
+      <h2>CONFIGURATION JARVIS</h2>
+      <p>Cette version Android fonctionne sans serveur JARVIS. La clé API reste sur le téléphone et n'est jamais enregistrée dans GitHub.</p>
+
+      <label for="userName">Nom de l'utilisateur</label>
+      <input id="userName" placeholder="Ex. Guillaume" />
+
+      <label for="model">Modèle OpenRouter</label>
+      <input id="model" placeholder="Identifiant du modèle OpenRouter" />
+
+      <label for="apiKey">Clé API OpenRouter</label>
+      <input id="apiKey" type="password" autocomplete="off" placeholder="Colle ta clé puis Enregistrer" />
+      <div class="note" id="keyStatus">Vérification de la clé…</div>
+
+      <div class="row">
+        <button class="primary" id="saveSettings" type="button">ENREGISTRER</button>
+        <button class="secondary" id="closeSettings" type="button">FERMER</button>
+      </div>
+      <div class="row">
+        <button class="danger" id="clearKey" type="button">EFFACER LA CLÉ</button>
+        <button class="danger" id="clearMemory" type="button">EFFACER LA MÉMOIRE</button>
+      </div>
+      <p class="note">Le coût ou la gratuité dépend du modèle sélectionné dans ton compte OpenRouter. JARVIS n'envoie une requête IA que lorsque la commande ne peut pas être traitée localement.</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const chat = $("chat");
+  const core = $("core");
+  const statusEl = $("status");
+  const subtitle = $("subtitle");
+  const input = $("input");
+  const micBtn = $("micBtn");
+  const sendBtn = $("sendBtn");
+  const modal = $("settingsModal");
+
+  const LS_HISTORY = "jarvis_history_v1";
+  const LS_MEMORY = "jarvis_memory_v1";
+  const LS_MODEL = "jarvis_openrouter_model";
+  const LS_USER = "jarvis_user_name";
+
+  let busy = false;
+  let history = readJson(LS_HISTORY, []);
+  let memory = readJson(LS_MEMORY, []);
+
+  function bridge() {
+    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ArcherBridge
+      ? window.Capacitor.Plugins.ArcherBridge
+      : null;
+  }
+
+  function readJson(key, fallback) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) || "");
+      return Array.isArray(v) ? v : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function saveHistory() {
+    history = history.slice(-30);
+    localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+  }
+
+  function saveMemory() {
+    memory = memory.slice(-30);
+    localStorage.setItem(LS_MEMORY, JSON.stringify(memory));
+  }
+
+  function setState(state, text) {
+    core.className = "core" + (state && state !== "idle" ? " " + state : "");
+    statusEl.textContent =
+      state === "listening" ? "ÉCOUTE" :
+      state === "thinking" ? "RÉFLEXION" :
+      state === "speaking" ? "PARLE" : "VEILLE";
+    if (text) subtitle.textContent = text;
+  }
+
+  function addMessage(role, text, persist = true) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + (role === "user" ? "user" : "assistant");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    chat.appendChild(wrap);
+    chat.scrollTop = chat.scrollHeight;
+    if (persist) {
+      history.push({ role, text, at: Date.now() });
+      saveHistory();
+    }
+  }
+
+  function renderHistory() {
+    chat.innerHTML = "";
+    if (!history.length) {
+      addMessage("assistant", "JARVIS prêt. Les commandes Android simples sont traitées localement.", false);
+      return;
+    }
+    history.slice(-18).forEach((m) => addMessage(m.role, m.text, false));
+  }
+
+  function stripWake(text) {
+    return text.trim().replace(/^jarvis\s*[,;:.-]?\s*/i, "").trim();
+  }
+
+  const aliases = {
+    "google maps": "maps",
+    "carte": "maps",
+    "cartes": "maps",
+    "parametre": "paramètres",
+    "parametres": "paramètres",
+    "reglage": "réglages",
+    "reglages": "réglages",
+    "camera": "caméra",
+    "photo": "appareil photo",
+    "appareil photo": "appareil photo",
+    "telephone": "téléphone",
+    "tel": "téléphone",
+    "sms": "messages",
+    "play store": "play store",
+    "fichier": "fichiers"
+  };
+
+  function normalizeApp(name) {
+    const k = name.toLowerCase().trim();
+    return aliases[k] || k;
+  }
+
+  async function localCommand(raw) {
+    const text = stripWake(raw);
+    let m;
+
+    m = text.match(/^(?:ouvre|lance|démarre|demarre)\s+(.+)$/i);
+    if (m) {
+      const app = normalizeApp(m[1]);
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.openApp({ name: app });
+      return "J'ouvre " + m[1] + ".";
+    }
+
+    m = text.match(/^(?:cherche|recherche)\s+(.+?)\s+(?:sur\s+)?youtube$/i);
+    if (m) {
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.openApp({ name: "youtube", query: m[1] });
+      return "Je cherche " + m[1] + " sur YouTube.";
+    }
+
+    m = text.match(/^(?:joue|mets)\s+(.+)$/i);
+    if (m) {
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.openApp({ name: "youtube", query: m[1] });
+      return "Je lance la recherche de " + m[1] + " sur YouTube.";
+    }
+
+    m = text.match(/^(?:cherche|recherche)\s+(.+?)(?:\s+sur\s+google)?$/i);
+    if (m) {
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.openUrl({ url: "https://www.google.com/search?q=" + encodeURIComponent(m[1]) });
+      return "Je lance la recherche.";
+    }
+
+    m = text.match(/^(?:souviens-toi|souviens toi|mémorise|memorise)\s+(?:que\s+)?(.+)$/i);
+    if (m) {
+      memory.push(m[1].trim());
+      saveMemory();
+      return "C'est mémorisé.";
+    }
+
+    if (/^(?:efface|supprime)\s+(?:la\s+)?mémoire$/i.test(text)) {
+      memory = [];
+      saveMemory();
+      return "Mémoire locale effacée.";
+    }
+
+    if (/^(?:quelle heure est-il|quelle heure est il|il est quelle heure)$/i.test(text)) {
+      return "Il est " + new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + ".";
+    }
+
+    if (/^(?:quelle date sommes-nous|on est quel jour|nous sommes quel jour)$/i.test(text)) {
+      return "Nous sommes le " + new Date().toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long", year:"numeric" }) + ".";
+    }
+
+    return null;
+  }
+
+  function systemPrompt() {
+    const user = localStorage.getItem(LS_USER) || "Monsieur";
+    const recent = history.slice(-8).map((m) => (m.role === "user" ? "Utilisateur: " : "JARVIS: ") + m.text).join("\n");
+    const mem = memory.length ? memory.map((x) => "- " + x).join("\n") : "Aucune mémoire locale enregistrée.";
+    return [
+      "Tu es JARVIS, l'assistant personnel Android de " + user + ".",
+      "Réponds en français par défaut. Sois calme, précis, concis et orienté action.",
+      "Ne prétends jamais avoir exécuté une action Android si elle n'a pas été exécutée localement avant cet appel.",
+      "Mémoires locales:",
+      mem,
+      "Contexte récent:",
+      recent || "Aucun historique."
+    ].join("\n\n");
+  }
+
+  function pickFrenchVoice() {
+    if (!window.speechSynthesis) return null;
+    const voices = speechSynthesis.getVoices();
+    const fr = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("fr"));
+    const preferred = fr.find((v) => /google|natural|neural|microsoft/i.test(v.name));
+    return preferred || fr[0] || voices[0] || null;
+  }
+
+  function speak(text) {
+    if (!window.speechSynthesis || !text) {
+      setState("idle");
+      return;
+    }
+    try { speechSynthesis.cancel(); } catch (_) {}
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickFrenchVoice();
+    if (v) u.voice = v;
+    u.lang = v && v.lang ? v.lang : "fr-FR";
+    u.rate = 1;
+    u.pitch = 1;
+    u.onstart = () => setState("speaking", text);
+    u.onend = () => setState("idle", "Prêt.");
+    u.onerror = () => setState("idle", "Prêt.");
+    speechSynthesis.speak(u);
+  }
+
+  async function askAI(text) {
+    const b = bridge();
+    if (!b) throw new Error("Pont Android indisponible");
+    const model = (localStorage.getItem(LS_MODEL) || "").trim();
+    if (!model) {
+      openSettings();
+      throw new Error("Renseigne d'abord ton modèle OpenRouter dans Réglages.");
+    }
+    const status = await b.apiKeyStatus();
+    if (!status.configured) {
+      openSettings();
+      throw new Error("Renseigne d'abord ta clé OpenRouter dans Réglages.");
+    }
+    const out = await b.askAI({ message: text, system: systemPrompt(), model });
+    return out && out.reply ? String(out.reply) : "Je n'ai reçu aucune réponse.";
+  }
+
+  async function handle(text) {
+    text = String(text || "").trim();
+    if (!text || busy) return;
+    busy = true;
+    micBtn.disabled = sendBtn.disabled = true;
+    addMessage("user", text);
+    setState("thinking", "Traitement…");
+
+    try {
+      const local = await localCommand(text);
+      const reply = local !== null ? local : await askAI(stripWake(text));
+      addMessage("assistant", reply);
+      subtitle.textContent = reply;
+      speak(reply);
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      addMessage("assistant", "Erreur : " + msg);
+      setState("idle", "Erreur : " + msg);
+    } finally {
+      busy = false;
+      micBtn.disabled = sendBtn.disabled = false;
+    }
+  }
+
+  async function listen() {
+    if (busy) return;
+    const b = bridge();
+    if (!b) {
+      setState("idle", "Pont Android indisponible.");
+      return;
+    }
+    setState("listening", "Je t'écoute…");
+    try {
+      const out = await b.listen({ language: "fr-FR" });
+      const text = out && out.text ? String(out.text).trim() : "";
+      if (text) {
+        input.value = text;
+        await handle(text);
+        input.value = "";
+      } else {
+        setState("idle", "Aucune phrase reconnue.");
       }
-      .ring {
-        width: 130px; height: 130px; border-radius: 50%;
-        border: 2px solid rgba(45, 212, 191, 0.55);
-        box-shadow: 0 0 30px rgba(45, 212, 191, 0.35), inset 0 0 22px rgba(45, 212, 191, 0.25);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 44px; font-weight: 900; color: #fbbf24;
-        animation: pulse 2.2s ease-in-out infinite;
-        margin-bottom: 26px;
+    } catch (_) {
+      setState("idle", "Écoute annulée.");
+    }
+  }
+
+  async function refreshKeyStatus() {
+    const b = bridge();
+    if (!b) {
+      $("keyStatus").textContent = "Pont Android indisponible";
+      $("keyStatus").className = "note warn";
+      return;
+    }
+    try {
+      const out = await b.apiKeyStatus();
+      $("keyStatus").textContent = out.configured ? "Clé API enregistrée sur le téléphone." : "Aucune clé API enregistrée.";
+      $("keyStatus").className = "note " + (out.configured ? "ok" : "warn");
+    } catch (_) {
+      $("keyStatus").textContent = "Impossible de vérifier la clé.";
+    }
+  }
+
+  function openSettings() {
+    $("userName").value = localStorage.getItem(LS_USER) || "";
+    $("model").value = localStorage.getItem(LS_MODEL) || "";
+    $("apiKey").value = "";
+    modal.classList.add("open");
+    refreshKeyStatus();
+  }
+
+  function closeSettings() {
+    modal.classList.remove("open");
+  }
+
+  $("settingsBtn").addEventListener("click", openSettings);
+  $("closeSettings").addEventListener("click", closeSettings);
+  $("saveSettings").addEventListener("click", async () => {
+    const user = $("userName").value.trim();
+    const model = $("model").value.trim();
+    const key = $("apiKey").value.trim();
+    if (user) localStorage.setItem(LS_USER, user); else localStorage.removeItem(LS_USER);
+    if (model) localStorage.setItem(LS_MODEL, model); else localStorage.removeItem(LS_MODEL);
+    if (key) {
+      const b = bridge();
+      if (!b) return alert("Pont Android indisponible.");
+      try {
+        await b.saveApiKey({ apiKey: key });
+        $("apiKey").value = "";
+      } catch (e) {
+        return alert("Impossible d'enregistrer la clé : " + (e.message || e));
       }
-      @keyframes pulse { 50% { transform: scale(1.05); opacity: 0.85; } }
-      .label { font-size: 15px; font-weight: 700; color: #e2e8f0; }
-      .sub { font-size: 10px; margin-top: 10px; color: #7dd3a8; opacity: 0.75; }
-    </style>
-  </head>
-  <body>
-    <div class="ring">J</div>
-    <div class="label">JARVIS</div>
-    <div class="sub">Connexion au cerveau JARVIS…</div>
-    <!-- Fallback shell: the Capacitor config opens the ARCHER website directly.
-         If that config is ever removed, this page forwards to it. -->
-    <script>
-      setTimeout(function () {
-        if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.ArcherBridge) {
-          location.replace("https://preview-8cd85ce6-1016-48b5-a387-d12748b3dc31.space-z.ai");
-        }
-      }, 2500);
-    </script>
-  </body>
+    }
+    await refreshKeyStatus();
+    subtitle.textContent = "Configuration enregistrée.";
+  });
+
+  $("clearKey").addEventListener("click", async () => {
+    const b = bridge();
+    if (!b) return;
+    await b.clearApiKey();
+    $("apiKey").value = "";
+    await refreshKeyStatus();
+  });
+
+  $("clearMemory").addEventListener("click", () => {
+    memory = [];
+    saveMemory();
+    subtitle.textContent = "Mémoire locale effacée.";
+  });
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    await handle(text);
+  });
+
+  micBtn.addEventListener("click", listen);
+  core.addEventListener("click", listen);
+
+  window.addEventListener("load", async () => {
+    renderHistory();
+    setState("idle", "Mode Android local — prêt.");
+    if (window.speechSynthesis) {
+      speechSynthesis.getVoices();
+      speechSynthesis.addEventListener && speechSynthesis.addEventListener("voiceschanged", () => speechSynthesis.getVoices());
+    }
+    const b = bridge();
+    if (!b) {
+      subtitle.textContent = "Pont Android non chargé.";
+      return;
+    }
+    try {
+      const ks = await b.apiKeyStatus();
+      const model = localStorage.getItem(LS_MODEL) || "";
+      if (!ks.configured || !model) {
+        subtitle.textContent = "Configure OpenRouter dans Réglages pour les questions IA.";
+      }
+    } catch (_) {}
+  });
+})();
+</script>
+</body>
 </html>
