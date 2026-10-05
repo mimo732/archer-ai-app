@@ -25,6 +25,12 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Cache stable Android debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: jarvis-android-debug-keystore-v1
+
       - name: Install Capacitor toolchain
         run: npm install --ignore-workspace --no-audit --no-fund
 
