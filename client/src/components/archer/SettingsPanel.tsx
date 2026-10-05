@@ -106,17 +106,17 @@ export default function SettingsPanel({
   };
 
   return (
-    <HUDPanel open={open} onClose={onClose} title="Systems Config" accent="#4ade80">
+    <HUDPanel open={open} onClose={onClose} title="Configuration système" accent="#4ade80">
       <div className="space-y-5">
         {/* user name */}
         <div>
           <label className="flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">
-            <User className="w-3.5 h-3.5" /> Your Name
+            <User className="w-3.5 h-3.5" /> Ton nom
           </label>
           <input
             value={local.userName}
             onChange={(e) => setLocal({ ...local, userName: e.target.value })}
-            placeholder="e.g. Archer"
+            placeholder="ex. utilisateur"
             className="w-full bg-black/50 rounded-lg px-3 py-2.5 text-sm text-emerald-50 placeholder:text-white/25 outline-none border border-emerald-400/25 focus:border-emerald-400/60 transition-colors"
           />
         </div>
@@ -124,7 +124,7 @@ export default function SettingsPanel({
         {/* voice enabled */}
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-sm text-white/80">
-            <Volume2 className="w-4 h-4 text-emerald-300/80" /> Voice Replies
+            <Volume2 className="w-4 h-4 text-emerald-300/80" /> Réponses vocales
           </span>
           <Toggle on={local.voiceEnabled !== "false"} onChange={(v) => setLocal({ ...local, voiceEnabled: String(v) })} />
         </div>
@@ -132,7 +132,7 @@ export default function SettingsPanel({
         {/* auto listen */}
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-sm text-white/80">
-            <Repeat className="w-4 h-4 text-emerald-300/80" /> Continuous Conversation
+            <Repeat className="w-4 h-4 text-emerald-300/80" /> Conversation continue
           </span>
           <Toggle on={local.autoListen !== "false"} onChange={(v) => setLocal({ ...local, autoListen: String(v) })} />
         </div>
@@ -140,7 +140,7 @@ export default function SettingsPanel({
         {/* output volume (system config) — max 100%, default 50% */}
         <div>
           <label className="flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">
-            <Volume2 className="w-3.5 h-3.5" /> Output Volume — {Math.round(Number(local.volume) || 50)}%
+            <Volume2 className="w-3.5 h-3.5" /> Volume de sortie — {Math.round(Number(local.volume) || 50)}%
           </label>
           <input
             type="range"
@@ -154,7 +154,7 @@ export default function SettingsPanel({
           />
           <div className="flex justify-between text-[10px] text-white/30 mt-1">
             <span>0%</span>
-            <span>DEFAULT 50%</span>
+            <span>DÉFAUT 50%</span>
             <span>100%</span>
           </div>
           {onTestVoice && (
@@ -162,7 +162,7 @@ export default function SettingsPanel({
               onClick={onTestVoice}
               className="mt-2.5 h-9 px-4 rounded-lg flex items-center gap-2 border border-emerald-400/40 bg-emerald-400/10 hover:bg-emerald-400/20 transition-colors text-[11px] uppercase tracking-[0.2em] archer-font text-emerald-200"
             >
-              <AudioLines className="w-3.5 h-3.5" /> Test Voice
+              <AudioLines className="w-3.5 h-3.5" /> Tester la voix
             </button>
           )}
         </div>
@@ -170,7 +170,7 @@ export default function SettingsPanel({
         {/* speech rate */}
         <div>
           <label className="flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">
-            <Gauge className="w-3.5 h-3.5" /> Speech Rate — {(Number(local.speechRate) || 1).toFixed(1)}x
+            <Gauge className="w-3.5 h-3.5" /> Vitesse de parole — {(Number(local.speechRate) || 1).toFixed(1)}x
           </label>
           <input
             type="range"
@@ -185,7 +185,7 @@ export default function SettingsPanel({
 
         {/* voice gender */}
         <div>
-          <label className="block text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">Voice Style</label>
+          <label className="block text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">Style de voix</label>
           <div className="grid grid-cols-2 gap-2">
             {["male", "female"].map((g) => (
               <button
@@ -206,7 +206,7 @@ export default function SettingsPanel({
         {/* voice engine — explicit voice pick for maximum clarity */}
         <div>
           <label className="flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">
-            <Mic className="w-3.5 h-3.5" /> Voice Engine
+            <Mic className="w-3.5 h-3.5" /> Moteur vocal
           </label>
           <select
             value={local.voiceName || ""}
@@ -214,7 +214,7 @@ export default function SettingsPanel({
             className="w-full h-11 bg-black/50 rounded-lg px-3 text-sm text-emerald-50 outline-none border border-emerald-400/25 focus:border-emerald-400/60 transition-colors"
             aria-label="Speech synthesis voice"
           >
-            <option value="">AUTO — Best quality (recommended)</option>
+            <option value="">AUTO — Meilleure qualité (recommandé)</option>
             {voices.map((v) => (
               <option key={`${v.lang}-${v.name}`} value={v.name}>
                 {v.name} ({v.lang})
@@ -230,10 +230,11 @@ export default function SettingsPanel({
         {/* language */}
         <div>
           <label className="flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-emerald-300/90 archer-font mb-2">
-            <Languages className="w-3.5 h-3.5" /> Recognition Language
+            <Languages className="w-3.5 h-3.5" /> Langue de reconnaissance
           </label>
           <div className="grid grid-cols-3 gap-2">
             {[
+              { code: "fr-FR", label: "Français" },
               { code: "en-US", label: "English" },
               { code: "bn-BD", label: "বাংলা" },
               { code: "hi-IN", label: "हिन्दी" },
@@ -242,7 +243,7 @@ export default function SettingsPanel({
                 key={l.code}
                 onClick={() => setLocal({ ...local, language: l.code })}
                 className={`h-10 rounded-lg text-xs border transition-all ${
-                  (local.language || "en-US") === l.code
+                  (local.language || "fr-FR") === l.code
                     ? "border-emerald-400/70 bg-emerald-400/20 text-emerald-200"
                     : "border-white/15 bg-white/5 text-white/50 hover:border-white/30"
                 }`}
@@ -256,14 +257,14 @@ export default function SettingsPanel({
         {/* install as system app */}
         <div className="rounded-lg border border-cyan-400/25 bg-cyan-400/5 p-3">
           <div className="flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-cyan-300/90 archer-font mb-1.5">
-            <Download className="w-3.5 h-3.5" /> Install as System App
+            <Download className="w-3.5 h-3.5" /> Installer comme application
           </div>
           {installAvailable ? (
             <button
               onClick={onInstall}
               className="w-full h-10 rounded-lg border border-cyan-400/50 bg-cyan-400/15 hover:bg-cyan-400/25 transition-colors text-[11px] uppercase tracking-[0.2em] archer-font text-cyan-100"
             >
-              Install ARCHER on this device
+              Installer JARVIS sur cet appareil
             </button>
           ) : isIOSDevice ? (
             <p className="text-[11px] text-cyan-100/70 leading-relaxed">
@@ -309,7 +310,7 @@ export default function SettingsPanel({
           onClick={clearMemory}
           className="w-full h-11 rounded-lg flex items-center justify-center gap-2 border border-red-400/30 text-red-300/90 hover:bg-red-400/10 transition-colors text-sm"
         >
-          <Trash2 className="w-4 h-4" /> {wiped ? "Memories Wiped" : "Wipe All Memories"}
+          <Trash2 className="w-4 h-4" /> {wiped ? "Mémoires effacées" : "Effacer toutes les mémoires"}
         </button>
 
         {/* save */}
@@ -319,7 +320,7 @@ export default function SettingsPanel({
           className="w-full h-12 rounded-lg flex items-center justify-center gap-2 archer-font text-xs tracking-[0.3em] uppercase text-black bg-emerald-400 hover:bg-emerald-300 transition-colors disabled:opacity-40 shadow-[0_0_20px_rgba(52,211,153,0.35)]"
         >
           <Settings2 className="w-4 h-4" />
-          {busy ? "Applying..." : "Save Configuration"}
+          {busy ? "Application..." : "Enregistrer la configuration"}
         </button>
       </div>
     </HUDPanel>
