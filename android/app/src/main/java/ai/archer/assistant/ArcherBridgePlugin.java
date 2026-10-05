@@ -1,22 +1,26 @@
 package ai.archer.assistant;
 
-import android.app.Activity;
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
+import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResult;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKey;
 
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
-import com.getcapacitor.annotation.ActivityCallback;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import org.json.JSONArray;
@@ -47,7 +51,12 @@ import java.util.concurrent.Executors;
  *
  * The plugin name remains "ArcherBridge" for compatibility with the original codebase.
  */
-@CapacitorPlugin(name = "ArcherBridge")
+@CapacitorPlugin(
+        name = "ArcherBridge",
+        permissions = {
+                @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO })
+        }
+)
 public class ArcherBridgePlugin extends Plugin {
 
     private static final String PREF_API_KEY = "openrouterApiKey";
@@ -264,32 +273,102 @@ public class ArcherBridgePlugin extends Plugin {
         });
     }
 
+    private SpeechRecognizer speechRecognizer;
+
     @PluginMethod
     public void listen(PluginCall call) {
-        String language = call.getString("language", "fr-FR");
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language);
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Parle à JARVIS");
-        startActivityForResult(call, intent, "speechResult");
+        if (getPermissionState("microphone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("microphone", call, "microphonePermissionCallback");
+            return;
+        }
+        startInAppRecognition(call);
     }
 
-    @ActivityCallback
-    private void speechResult(PluginCall call, ActivityResult result) {
-        if (call == null) return;
-        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
-            call.reject("Reconnaissance vocale annulée");
-            return;
+    @PermissionCallback
+    private void microphonePermissionCallback(PluginCall call) {
+        if (getPermissionState("microphone") == PermissionState.GRANTED) {
+            startInAppRecognition(call);
+        } else {
+            call.reject("Permission microphone refusée");
         }
-        ArrayList<String> matches = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-        if (matches == null || matches.isEmpty()) {
-            call.reject("Aucune phrase reconnue");
-            return;
+    }
+
+    /**
+     * SpeechRecognizer keeps recognition inside JARVIS instead of launching
+     * the large Google voice-dialog activity used by ACTION_RECOGNIZE_SPEECH.
+     */
+    private void startInAppRecognition(PluginCall call) {
+        final String language = call.getString("language", "fr-FR");
+
+        getActivity().runOnUiThread(() -> {
+            if (!SpeechRecognizer.isRecognitionAvailable(getContext())) {
+                call.reject("Service de reconnaissance vocale indisponible");
+                return;
+            }
+
+            cleanupSpeechRecognizer();
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getContext());
+            speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle params) {}
+                @Override public void onBeginningOfSpeech() {}
+                @Override public void onRmsChanged(float rmsdB) {}
+                @Override public void onBufferReceived(byte[] buffer) {}
+                @Override public void onEndOfSpeech() {}
+
+                @Override
+                public void onError(int error) {
+                    String message;
+                    switch (error) {
+                        case SpeechRecognizer.ERROR_AUDIO: message = "Erreur audio"; break;
+                        case SpeechRecognizer.ERROR_CLIENT: message = "Écoute interrompue"; break;
+                        case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: message = "Permission microphone manquante"; break;
+                        case SpeechRecognizer.ERROR_NETWORK:
+                        case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: message = "Service vocal réseau indisponible"; break;
+                        case SpeechRecognizer.ERROR_NO_MATCH: message = "Je n’ai pas compris"; break;
+                        case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: message = "Microphone occupé"; break;
+                        case SpeechRecognizer.ERROR_SERVER: message = "Service vocal indisponible"; break;
+                        case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: message = "Aucune parole détectée"; break;
+                        default: message = "Reconnaissance vocale interrompue"; break;
+                    }
+                    cleanupSpeechRecognizer();
+                    call.reject(message);
+                }
+
+                @Override
+                public void onResults(Bundle results) {
+                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    cleanupSpeechRecognizer();
+                    if (matches == null || matches.isEmpty()) {
+                        call.reject("Aucune phrase reconnue");
+                        return;
+                    }
+                    JSObject out = new JSObject();
+                    out.put("text", matches.get(0));
+                    call.resolve(out);
+                }
+
+                @Override public void onPartialResults(Bundle partialResults) {}
+                @Override public void onEvent(int eventType, Bundle params) {}
+            });
+
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            speechRecognizer.startListening(intent);
+        });
+    }
+
+    private void cleanupSpeechRecognizer() {
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.cancel();
+                speechRecognizer.destroy();
+            } catch (Exception ignored) {}
+            speechRecognizer = null;
         }
-        JSObject out = new JSObject();
-        out.put("text", matches.get(0));
-        call.resolve(out);
     }
 
     @PluginMethod
