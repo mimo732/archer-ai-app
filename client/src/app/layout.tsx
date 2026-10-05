@@ -11,10 +11,10 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  title: "ARCHER AI — Personal Jarvis Assistant",
+  title: "JARVIS — Assistant personnel",
   description:
-    "A Jarvis-style voice AI assistant with particle core HUD, agent actions, memory, tasks and live news. Just like Iron Man's JARVIS.",
-  keywords: ["ARCHER AI", "Jarvis", "AI assistant", "voice assistant", "Iron Man", "AI agent"],
+    "Assistant vocal personnel JARVIS avec mémoire, tâches, actions et commandes d’appareils.",
+  keywords: ["JARVIS", "assistant IA", "assistant vocal", "agent IA"],
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "ARCHER AI",
+    title: "JARVIS",
   },
 };
 
@@ -47,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="dark">
+    <html lang="fr" suppressHydrationWarning className="dark">
       <body className={`${orbitron.variable} antialiased bg-[#030603] text-foreground`}>
         {children}
         {/* Universal device agent — activates ONLY inside the installed ARCHER
