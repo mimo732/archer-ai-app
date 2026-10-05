@@ -1,29 +1,58 @@
 package ai.archer.assistant;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
+import android.speech.RecognizerIntent;
 import android.widget.Toast;
+
+import androidx.activity.result.ActivityResult;
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKey;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * ARCHER AI — Android native bridge.
- * The website's universal agent (/agent-client.js) detects this plugin as
- * window.Capacitor.Plugins.ArcherBridge and uses it to execute commands
- * queued on the ARCHER website: open apps, open URLs, notify, sys info.
+ * JARVIS — Android native bridge.
+ *
+ * Personal/local mode:
+ * - no remote ARCHER server is required;
+ * - OpenRouter API key is stored on-device (encrypted when AndroidX security is available);
+ * - AI requests leave the phone only for the selected OpenRouter model;
+ * - app launching and speech capture run directly on Android.
+ *
+ * The plugin name remains "ArcherBridge" for compatibility with the original codebase.
  */
 @CapacitorPlugin(name = "ArcherBridge")
 public class ArcherBridgePlugin extends Plugin {
 
-    /** friendly names → Android package ids (mirrors the website APP_LINKS) */
+    private static final String PREF_API_KEY = "openrouterApiKey";
+    private final ExecutorService io = Executors.newSingleThreadExecutor();
+
     private static final Map<String, String> PACKAGES = new HashMap<String, String>();
     static {
         PACKAGES.put("youtube", "com.google.android.youtube");
@@ -35,6 +64,8 @@ public class ArcherBridgePlugin extends Plugin {
         PACKAGES.put("x", "com.twitter.android");
         PACKAGES.put("google", "com.google.android.googlequicksearchbox");
         PACKAGES.put("maps", "com.google.android.apps.maps");
+        PACKAGES.put("google maps", "com.google.android.apps.maps");
+        PACKAGES.put("cartes", "com.google.android.apps.maps");
         PACKAGES.put("gmail", "com.google.android.gm");
         PACKAGES.put("spotify", "com.spotify.music");
         PACKAGES.put("github", "com.github.android");
@@ -45,63 +76,246 @@ public class ArcherBridgePlugin extends Plugin {
         PACKAGES.put("netflix", "com.netflix.mediaclient");
         PACKAGES.put("chrome", "com.android.chrome");
         PACKAGES.put("settings", "com.android.settings");
+        PACKAGES.put("réglages", "com.android.settings");
+        PACKAGES.put("paramètres", "com.android.settings");
         PACKAGES.put("camera", "com.android.camera");
+        PACKAGES.put("caméra", "com.android.camera");
+        PACKAGES.put("appareil photo", "com.android.camera");
         PACKAGES.put("phone", "com.android.dialer");
+        PACKAGES.put("téléphone", "com.android.dialer");
         PACKAGES.put("messages", "com.google.android.apps.messaging");
+        PACKAGES.put("sms", "com.google.android.apps.messaging");
         PACKAGES.put("playstore", "com.android.vending");
+        PACKAGES.put("play store", "com.android.vending");
         PACKAGES.put("files", "com.google.android.documentsui");
+        PACKAGES.put("fichiers", "com.google.android.documentsui");
+    }
+
+    private static final Map<String, String> FALLBACK_URLS = new HashMap<String, String>();
+    static {
+        FALLBACK_URLS.put("youtube", "https://www.youtube.com");
+        FALLBACK_URLS.put("yt", "https://www.youtube.com");
+        FALLBACK_URLS.put("instagram", "https://www.instagram.com");
+        FALLBACK_URLS.put("facebook", "https://www.facebook.com");
+        FALLBACK_URLS.put("whatsapp", "https://web.whatsapp.com");
+        FALLBACK_URLS.put("twitter", "https://x.com");
+        FALLBACK_URLS.put("x", "https://x.com");
+        FALLBACK_URLS.put("google", "https://www.google.com");
+        FALLBACK_URLS.put("maps", "https://maps.google.com");
+        FALLBACK_URLS.put("google maps", "https://maps.google.com");
+        FALLBACK_URLS.put("cartes", "https://maps.google.com");
+        FALLBACK_URLS.put("gmail", "https://mail.google.com");
+        FALLBACK_URLS.put("spotify", "https://open.spotify.com");
+        FALLBACK_URLS.put("github", "https://github.com");
+        FALLBACK_URLS.put("chatgpt", "https://chatgpt.com");
+        FALLBACK_URLS.put("tiktok", "https://www.tiktok.com");
+        FALLBACK_URLS.put("telegram", "https://web.telegram.org");
+        FALLBACK_URLS.put("discord", "https://discord.com/app");
+        FALLBACK_URLS.put("netflix", "https://www.netflix.com");
+    }
+
+    private SharedPreferences securePrefs() {
+        try {
+            MasterKey masterKey = new MasterKey.Builder(getContext())
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build();
+            return EncryptedSharedPreferences.create(
+                    getContext(),
+                    "jarvis_secure",
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            );
+        } catch (Exception ignored) {
+            return getContext().getSharedPreferences("jarvis_secure_fallback", android.content.Context.MODE_PRIVATE);
+        }
     }
 
     @PluginMethod
     public void deviceInfo(PluginCall call) {
         JSObject info = new JSObject();
-        String persisted = getContext()
-                .getSharedPreferences("archer", android.content.Context.MODE_PRIVATE)
-                .getString("deviceId", null);
-        String deviceId = persisted;
+        SharedPreferences prefs = getContext().getSharedPreferences("jarvis", android.content.Context.MODE_PRIVATE);
+        String deviceId = prefs.getString("deviceId", null);
         if (deviceId == null || deviceId.isEmpty()) {
-            deviceId = "android-" + java.util.UUID.randomUUID().toString();
-            getContext()
-                    .getSharedPreferences("archer", android.content.Context.MODE_PRIVATE)
-                    .edit()
-                    .putString("deviceId", deviceId)
-                    .apply();
+            deviceId = "android-" + java.util.UUID.randomUUID();
+            prefs.edit().putString("deviceId", deviceId).apply();
         }
         info.put("deviceId", deviceId);
         info.put("name", "Android — " + Build.MODEL);
         info.put("platform", "android");
-        info.put("version", "1.0.0");
+        info.put("version", "1.1-local");
         call.resolve(info);
     }
 
     @PluginMethod
-    public void openApp(PluginCall call) {
-        String name = call.getString("name");
-        String query = call.getString("query", "");
-        if (name == null || name.isEmpty()) {
-            call.reject("no app name given");
+    public void saveApiKey(PluginCall call) {
+        String key = call.getString("apiKey", "").trim();
+        if (key.isEmpty()) {
+            call.reject("Clé API vide");
             return;
         }
-        String key = name.toLowerCase().trim();
-        String pkg = PACKAGES.get(key);
+        securePrefs().edit().putString(PREF_API_KEY, key).apply();
+        JSObject out = new JSObject();
+        out.put("saved", true);
+        call.resolve(out);
+    }
 
-        // YouTube search: deep-link straight into the app's search
-        if ("youtube".equals(key) || "yt".equals(key)) {
-            if (query != null && !query.isEmpty()) {
-                Intent search = new Intent(Intent.ACTION_SEARCH);
-                search.setPackage("com.google.android.youtube");
-                search.putExtra("query", query);
-                search.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                try {
-                    getContext().startActivity(search);
-                    JSObject out = new JSObject();
-                    out.put("result", "searching YouTube for " + query);
-                    call.resolve(out);
-                    return;
-                } catch (Exception ignored) {
-                    // fall through to browser search
+    @PluginMethod
+    public void clearApiKey(PluginCall call) {
+        securePrefs().edit().remove(PREF_API_KEY).apply();
+        JSObject out = new JSObject();
+        out.put("saved", false);
+        call.resolve(out);
+    }
+
+    @PluginMethod
+    public void apiKeyStatus(PluginCall call) {
+        String key = securePrefs().getString(PREF_API_KEY, "");
+        JSObject out = new JSObject();
+        out.put("configured", key != null && !key.trim().isEmpty());
+        call.resolve(out);
+    }
+
+    @PluginMethod
+    public void askAI(PluginCall call) {
+        final String message = call.getString("message", "").trim();
+        final String system = call.getString("system", "").trim();
+        final String model = call.getString("model", "").trim();
+        final String apiKey = securePrefs().getString(PREF_API_KEY, "");
+
+        if (message.isEmpty()) {
+            call.reject("Message vide");
+            return;
+        }
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            call.reject("Clé OpenRouter non configurée");
+            return;
+        }
+        if (model.isEmpty()) {
+            call.reject("Modèle OpenRouter non configuré");
+            return;
+        }
+
+        io.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL("https://openrouter.ai/api/v1/chat/completions");
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setConnectTimeout(20000);
+                conn.setReadTimeout(60000);
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setRequestProperty("X-Title", "JARVIS Personal Android");
+
+                JSONArray messages = new JSONArray();
+                if (!system.isEmpty()) {
+                    messages.put(new JSONObject().put("role", "system").put("content", system));
                 }
-                openUrl(URI_WEB, "https://www.youtube.com/results?search_query=" + query, call);
+                messages.put(new JSONObject().put("role", "user").put("content", message));
+
+                JSONObject body = new JSONObject();
+                body.put("model", model);
+                body.put("messages", messages);
+
+                byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(payload);
+                }
+
+                int code = conn.getResponseCode();
+                InputStream stream = code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream();
+                StringBuilder raw = new StringBuilder();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null) raw.append(line);
+                }
+
+                if (code < 200 || code >= 300) {
+                    call.reject("OpenRouter HTTP " + code + " : " + raw.toString());
+                    return;
+                }
+
+                JSONObject response = new JSONObject(raw.toString());
+                JSONArray choices = response.optJSONArray("choices");
+                if (choices == null || choices.length() == 0) {
+                    call.reject("Réponse OpenRouter vide");
+                    return;
+                }
+                String content = choices.getJSONObject(0)
+                        .getJSONObject("message")
+                        .optString("content", "")
+                        .trim();
+                if (content.isEmpty()) {
+                    call.reject("Réponse IA vide");
+                    return;
+                }
+
+                JSObject out = new JSObject();
+                out.put("reply", content);
+                call.resolve(out);
+            } catch (Exception e) {
+                call.reject("Erreur IA : " + e.getMessage());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    @PluginMethod
+    public void listen(PluginCall call) {
+        String language = call.getString("language", "fr-FR");
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language);
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Parle à JARVIS");
+        startActivityForResult(call, intent, "speechResult");
+    }
+
+    @ActivityCallback
+    private void speechResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
+            call.reject("Reconnaissance vocale annulée");
+            return;
+        }
+        ArrayList<String> matches = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (matches == null || matches.isEmpty()) {
+            call.reject("Aucune phrase reconnue");
+            return;
+        }
+        JSObject out = new JSObject();
+        out.put("text", matches.get(0));
+        call.resolve(out);
+    }
+
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String name = call.getString("name", "").toLowerCase(Locale.ROOT).trim();
+        String query = call.getString("query", "");
+        if (name.isEmpty()) {
+            call.reject("Nom d'application manquant");
+            return;
+        }
+
+        String pkg = PACKAGES.get(name);
+
+        if (("youtube".equals(name) || "yt".equals(name)) && query != null && !query.isEmpty()) {
+            Intent search = new Intent(Intent.ACTION_SEARCH);
+            search.setPackage("com.google.android.youtube");
+            search.putExtra("query", query);
+            search.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                getContext().startActivity(search);
+                JSObject out = new JSObject();
+                out.put("result", "Recherche YouTube : " + query);
+                call.resolve(out);
+                return;
+            } catch (Exception ignored) {
+                openUrlInternal("https://www.youtube.com/results?search_query=" + Uri.encode(query), call);
                 return;
             }
         }
@@ -114,75 +328,44 @@ public class ArcherBridgePlugin extends Plugin {
                 call.resolve();
                 return;
             }
-            // app not installed → fall back to the web (matching the site behaviour)
-            String fallback = FALLBACK_URLS.get(key);
+            String fallback = FALLBACK_URLS.get(name);
             if (fallback != null) {
-                openUrl(URI_WEB, fallback, call);
+                openUrlInternal(fallback, call);
                 return;
             }
-            call.reject("app not installed: " + name);
+            call.reject("Application non installée : " + name);
             return;
         }
 
-        call.reject("unknown app: " + name);
+        call.reject("Application inconnue : " + name);
     }
 
-    private static final int URI_WEB = 0;
-
-    /** common web fallbacks when the native app is missing */
-    private static final Map<String, String> FALLBACK_URLS = new HashMap<String, String>();
-    static {
-        FALLBACK_URLS.put("youtube", "https://www.youtube.com");
-        FALLBACK_URLS.put("yt", "https://www.youtube.com");
-        FALLBACK_URLS.put("instagram", "https://www.instagram.com");
-        FALLBACK_URLS.put("facebook", "https://www.facebook.com");
-        FALLBACK_URLS.put("whatsapp", "https://web.whatsapp.com");
-        FALLBACK_URLS.put("twitter", "https://x.com");
-        FALLBACK_URLS.put("x", "https://x.com");
-        FALLBACK_URLS.put("google", "https://www.google.com");
-        FALLBACK_URLS.put("maps", "https://maps.google.com");
-        FALLBACK_URLS.put("gmail", "https://mail.google.com");
-        FALLBACK_URLS.put("spotify", "https://open.spotify.com");
-        FALLBACK_URLS.put("github", "https://github.com");
-        FALLBACK_URLS.put("chatgpt", "https://chatgpt.com");
-        FALLBACK_URLS.put("tiktok", "https://www.tiktok.com");
-        FALLBACK_URLS.put("telegram", "https://web.telegram.org");
-        FALLBACK_URLS.put("discord", "https://discord.com/app");
-        FALLBACK_URLS.put("netflix", "https://www.netflix.com");
-    }
-
-    private void openUrl(int mode, String url, PluginCall call) {
+    private void openUrlInternal(String url, PluginCall call) {
         try {
-            Uri uri = Uri.parse(url);
-            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(intent);
             call.resolve();
         } catch (Exception e) {
-            call.reject("could not open: " + url);
+            call.reject("Impossible d'ouvrir : " + url);
         }
     }
 
     @PluginMethod
     public void openUrl(PluginCall call) {
-        String url = call.getString("url");
-        if (url == null || url.isEmpty()) {
-            call.reject("no url given");
-            return;
-        }
+        String url = call.getString("url", "");
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            call.reject("unsupported url");
+            call.reject("URL non prise en charge");
             return;
         }
-        openUrl(URI_WEB, url, call);
+        openUrlInternal(url, call);
     }
 
     @PluginMethod
     public void notify(PluginCall call) {
-        String title = call.getString("title", "ARCHER AI");
+        String title = call.getString("title", "JARVIS");
         String body = call.getString("body", "");
-        Toast.makeText(getContext(), title + (body.isEmpty() ? "" : " — " + body), Toast.LENGTH_LONG)
-                .show();
+        Toast.makeText(getContext(), title + (body.isEmpty() ? "" : " — " + body), Toast.LENGTH_LONG).show();
         call.resolve();
     }
 
