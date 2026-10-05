@@ -26,13 +26,13 @@ import HeadlinesSection from "@/components/archer/HeadlinesSection";
 import { useVoice } from "@/hooks/use-voice";
 
 const DEFAULT_SETTINGS: ArcherSettings = {
-  soul: "loyal, witty, calm, slightly formal like JARVIS from Iron Man.",
+  soul: "calme, précis, loyal, efficace et discret, dans un style JARVIS.",
   userName: "",
   voiceEnabled: "true",
   autoListen: "true",
   speechRate: "1",
   voiceGender: "male",
-  language: "en-US",
+  language: "fr-FR",
   volume: "50",
   voiceName: "",
   githubRepo: "",
@@ -211,7 +211,7 @@ async function sendToDevice(
 
 export default function ArcherAI() {
   const [settings, setSettings] = useState<ArcherSettings>(DEFAULT_SETTINGS);
-  const [subtitle, setSubtitle] = useState("ARCHER AI online. All systems nominal.");
+  const [subtitle, setSubtitle] = useState("JARVIS en ligne. Tous les systèmes sont opérationnels.");
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -498,7 +498,7 @@ export default function ArcherAI() {
                 body: JSON.stringify({
                   deviceId: target,
                   action: "notify",
-                  payload: { title: "ARCHER AI", body: sayMatch[1].trim() },
+                  payload: { title: "JARVIS", body: sayMatch[1].trim() },
                 }),
               });
               finish(`Notification sent to ${devName}, Sir.`);
@@ -545,7 +545,7 @@ export default function ArcherAI() {
         const data = await res.json();
         const reply: string = data.reply ?? "…";
         // ?? won't catch an empty string — guard so we never speak silence
-        const speakText: string = (data.speak || reply || "Done, Sir.").toString();
+        const speakText: string = (data.speak || reply || "Terminé.").toString();
         setSubtitle(reply);
 
         let finalSpeak = speakText;
@@ -578,7 +578,7 @@ export default function ArcherAI() {
           }
         }
       } catch {
-        setSubtitle("Connection error, Sir.");
+        setSubtitle("Erreur de connexion.");
         voiceStateSetter("idle");
         setBusy(false);
       }
@@ -620,19 +620,19 @@ export default function ArcherAI() {
 
   const statusLabel =
     voice.state === "listening"
-      ? "LISTENING"
+      ? "ÉCOUTE"
       : voice.state === "speaking"
-        ? "SPEAKING"
+        ? "PARLE"
         : voice.state === "thinking" || busy
-          ? "THINKING"
-          : "STANDBY";
+          ? "RÉFLEXION"
+          : "VEILLE";
 
   const statusColor =
-    statusLabel === "LISTENING"
+    statusLabel === "ÉCOUTE"
       ? "#22d3ee"
-      : statusLabel === "SPEAKING"
+      : statusLabel === "PARLE"
         ? "#4ade80"
-        : statusLabel === "THINKING"
+        : statusLabel === "RÉFLEXION"
           ? "#fbbf24"
           : "#5eead4";
 
@@ -676,10 +676,10 @@ export default function ArcherAI() {
   }, []);
 
   const menuItems = [
-    { label: "MEMORY", icon: MemoryStick, color: "#22d3ee", onClick: () => setMemoryOpen(true) },
+    { label: "MÉMOIRE", icon: MemoryStick, color: "#22d3ee", onClick: () => setMemoryOpen(true) },
     { label: "CHAT", icon: MessageSquare, color: "#fb923c", onClick: () => setChatOpen(true) },
-    { label: "SOUL", icon: Heart, color: "#e2e8f0", onClick: () => setSoulOpen(true) },
-    { label: "SETTING", icon: Settings2, color: "#4ade80", onClick: () => setSettingsOpen(true) },
+    { label: "PERSONNALITÉ", icon: Heart, color: "#e2e8f0", onClick: () => setSoulOpen(true) },
+    { label: "RÉGLAGES", icon: Settings2, color: "#4ade80", onClick: () => setSettingsOpen(true) },
   ];
 
   return (
@@ -696,7 +696,7 @@ export default function ArcherAI() {
         <div className="flex items-center gap-2">
           <Bot className="w-4 h-4 text-emerald-400/90" />
           <h1 className="archer-font text-sm sm:text-base font-bold tracking-[0.35em] text-white archer-text-glow">
-            ARCHER AI
+            JARVIS
           </h1>
         </div>
         <button
@@ -782,8 +782,8 @@ export default function ArcherAI() {
         {(!voice.supported || voice.micDenied) && (
           <p className="text-center text-[10px] text-amber-300/70 mt-2">
             {voice.micDenied
-              ? "Microphone blocked — allow mic access in browser settings, or use the text input."
-              : "Voice input not supported in this browser — use the text input below."}
+              ? "Microphone bloqué — autorise l’accès au micro dans les réglages, ou utilise le champ texte."
+              : "La saisie vocale n’est pas prise en charge par ce navigateur — utilise le champ texte."}
           </p>
         )}
       </section>
@@ -834,7 +834,7 @@ export default function ArcherAI() {
           <input
             name="q"
             autoComplete="off"
-            placeholder="Ask anything — /open /play /task /news /help"
+            placeholder="Demande quelque chose — /open /play /task /news /help"
             className="flex-1 min-w-0 bg-transparent outline-none text-sm text-cyan-50 placeholder:text-white/30 py-2"
           />
           <button
@@ -884,7 +884,7 @@ export default function ArcherAI() {
             stoppedRef.current = true; // don't auto-listen after the test
             primeVoice();
             muteMic();
-            speakFn("Voice systems online, Sir.", () => voice.setState("idle"));
+            speakFn("Systèmes vocaux opérationnels.", () => voice.setState("idle"));
           }}
         />
       )}
@@ -896,7 +896,7 @@ export default function ArcherAI() {
           <div className="relative w-full sm:max-w-md max-h-[82vh] flex flex-col rounded-t-2xl sm:rounded-2xl archer-slide-up border border-cyan-400/40 bg-[#050a06]/97" style={{ boxShadow: "0 0 30px rgba(34,211,238,0.2)" }}>
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/10">
               <h2 className="archer-font text-sm tracking-[0.3em] uppercase text-cyan-300 flex items-center gap-2">
-                <ListTodo className="w-4 h-4" /> Today Tasks
+                <ListTodo className="w-4 h-4" /> Tâches du jour
               </h2>
               <button onClick={() => setTasksOpen(false)} className="text-white/50 hover:text-white text-xl leading-none px-2" aria-label="Close">×</button>
             </div>
@@ -911,7 +911,7 @@ export default function ArcherAI() {
                 }}
                 className="mt-4 w-full h-10 rounded-lg border border-red-400/30 text-red-300/90 text-sm hover:bg-red-400/10 transition-colors"
               >
-                Clear Completed
+                Effacer les terminées
               </button>
             </div>
           </div>
