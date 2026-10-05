@@ -178,6 +178,7 @@
 
   let busy = false;
   let pendingAction = null;
+  let pendingTimer = null;
   let history = readJson(LS_HISTORY, []);
   let memory = readJson(LS_MEMORY, []);
 
@@ -306,14 +307,64 @@
     return aliases[k] || k;
   }
 
+  function clearPendingAction() {
+    pendingAction = null;
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+  }
+
+  function setPendingAction(action, timeoutMs = 30000) {
+    clearPendingAction();
+    pendingAction = action;
+    pendingTimer = setTimeout(() => {
+      pendingAction = null;
+      pendingTimer = null;
+      setState("idle", "Demande annulée faute de réponse.");
+    }, timeoutMs);
+  }
+
   async function localCommand(raw) {
     const text = stripWake(raw);
     let m;
 
+    // Natural cancellation at any point in a multi-turn command.
+    if (/^(?:annule|annuler|laisse tomber|laisse-tomber|c'est bon|stop)$/i.test(text)) {
+      clearPendingAction();
+      return { reply: "D’accord, j’annule." };
+    }
+
+    // Chained commands: handle the whole sentence without forcing a second turn.
+    m = text.match(/^(?:ouvre|lance)\s+(?:google\s+)?maps\s+(?:et\s+)?(?:emmène[- ]?moi|emmene[- ]?moi|conduis[- ]?moi|va|vas|navigue|itinéraire|itineraire)?\s*(?:à|a|vers|pour)\s+(.+)$/i);
+    if (m) {
+      const destination = m[1].trim();
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.navigate({ destination });
+      clearPendingAction();
+      return { reply: "J’ouvre l’itinéraire vers " + destination + "." };
+    }
+
+    m = text.match(/^(?:ouvre|lance)\s+youtube\s+(?:et\s+)?(?:cherche|recherche|mets|joue)\s+(.+)$/i);
+    if (m) {
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.openApp({ name: "youtube", query: m[1].trim() });
+      return { reply: "Je lance " + m[1].trim() + " sur YouTube." };
+    }
+
+    m = text.match(/^(?:ouvre|lance)\s+google\s+(?:et\s+)?(?:cherche|recherche)\s+(.+)$/i);
+    if (m) {
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.openUrl({ url: "https://www.google.com/search?q=" + encodeURIComponent(m[1].trim()) });
+      return { reply: "Je lance la recherche Google." };
+    }
+
     // Follow-up turn: after "ouvre Maps", JARVIS asks for the address and
     // waits for the next voice phrase instead of opening Maps immediately.
     if (pendingAction && pendingAction.type === "maps_destination") {
-      pendingAction = null;
       const destination = text.trim();
       if (!destination) {
         return { reply: "Je n’ai pas entendu l’adresse. Réessaie.", followupListen: true };
@@ -321,6 +372,7 @@
       const b = bridge();
       if (!b) throw new Error("Pont Android indisponible");
       await b.navigate({ destination });
+      clearPendingAction();
       return { reply: "J’ouvre l’itinéraire vers " + destination + "." };
     }
 
@@ -341,8 +393,8 @@
       const app = normalizeApp(m[1]);
 
       if (app === "maps") {
-        pendingAction = { type: "maps_destination" };
-        return { reply: "Bien. Quelle adresse ou quelle destination ?", followupListen: true };
+        setPendingAction({ type: "maps_destination" }, 45000);
+        return { reply: "Bien. Donne-moi l’adresse complète ou simplement le nom du lieu.", followupListen: true };
       }
 
       const b = bridge();
@@ -515,8 +567,13 @@
       } else {
         setState("idle", "Aucune phrase reconnue.");
       }
-    } catch (_) {
-      setState("idle", "Écoute annulée.");
+    } catch (e) {
+      const msg = e && e.message ? String(e.message) : "";
+      if (pendingAction && /compris|parole|match|timeout|détectée|detectee/i.test(msg)) {
+        setState("idle", "Je n’ai pas bien entendu. Appuie sur le micro et redonne l’adresse.");
+      } else {
+        setState("idle", "Écoute annulée.");
+      }
     }
   }
 
