@@ -286,6 +286,8 @@
 
   const aliases = {
     "google maps": "maps",
+    "google map": "maps",
+    "map": "maps",
     "carte": "maps",
     "cartes": "maps",
     "parametre": "paramètres",
@@ -336,7 +338,7 @@
     }
 
     // Chained commands: handle the whole sentence without forcing a second turn.
-    m = text.match(/^(?:ouvre|lance)\s+(?:google\s+)?maps\s+(?:et\s+)?(?:emmène[- ]?moi|emmene[- ]?moi|conduis[- ]?moi|va|vas|navigue|itinéraire|itineraire)?\s*(?:à|a|vers|pour)\s+(.+)$/i);
+    m = text.match(/^(?:ouvre(?:[- ]?moi)?|lance(?:[- ]?moi)?)\s+(?:google\s+)?maps?\s*(?:et\s+)?(?:(?:trouve|cherche|recherche)(?:[- ]?moi)?|(?:emmène|emmene|conduis)(?:[- ]?moi)?|va|vas|navigue|itinéraire|itineraire)\s*(?:à|a|vers|pour)?\s+(.+)$/i);
     if (m) {
       const destination = m[1].trim();
       const b = bridge();
@@ -379,7 +381,7 @@
     // One-shot navigation commands: "va à ...", "emmène-moi à ...",
     // "itinéraire vers ...", "ouvre Maps vers ...".
     m = text.match(/^(?:emmène[- ]?moi|emmene[- ]?moi|conduis[- ]?moi|va|vas|navigue|itinéraire|itineraire)(?:\s+(?:moi\s+)?)?(?:à|a|vers)\s+(.+)$/i)
-      || text.match(/^(?:ouvre|lance)\s+(?:google\s+)?maps\s+(?:à|a|vers|pour)\s+(.+)$/i);
+      || text.match(/^(?:ouvre(?:[- ]?moi)?|lance(?:[- ]?moi)?)\s+(?:google\s+)?maps?\s+(?:à|a|vers|pour)\s+(.+)$/i);
     if (m) {
       const destination = m[1].trim();
       const b = bridge();
@@ -388,7 +390,7 @@
       return { reply: "J’ouvre l’itinéraire vers " + destination + "." };
     }
 
-    m = text.match(/^(?:ouvre|lance|démarre|demarre)\s+(.+)$/i);
+    m = text.match(/^(?:ouvre(?:[- ]?moi)?|lance(?:[- ]?moi)?|démarre|demarre)\s+(.+)$/i);
     if (m) {
       const app = normalizeApp(m[1]);
 
@@ -403,7 +405,16 @@
       return { reply: "J’ouvre " + m[1] + "." };
     }
 
-    m = text.match(/^(?:cherche|recherche)\s+(.+?)\s+(?:sur\s+)?youtube$/i);
+    m = text.match(/^(?:(?:trouve|cherche|recherche)(?:[- ]?moi)?\s+)(.+?)\s+(?:sur|dans|avec)\s+(?:google\s+)?maps?$/i);
+    if (m) {
+      const destination = m[1].trim();
+      const b = bridge();
+      if (!b) throw new Error("Pont Android indisponible");
+      await b.navigate({ destination });
+      return { reply: "J’ouvre l’itinéraire vers " + destination + "." };
+    }
+
+        m = text.match(/^(?:cherche|recherche)\s+(.+?)\s+(?:sur\s+)?youtube$/i);
     if (m) {
       const b = bridge();
       if (!b) throw new Error("Pont Android indisponible");
@@ -504,7 +515,7 @@
     const model = (localStorage.getItem(LS_MODEL) || "").trim();
     if (!model) {
       openSettings();
-      throw new Error("Renseigne d'abord ton modèle OpenRouter dans Réglages.");
+      throw new Error("Je n’ai pas reconnu cette commande locale. Pour les questions IA, renseigne ton modèle OpenRouter dans Réglages.");
     }
     const status = await b.apiKeyStatus();
     if (!status.configured) {
