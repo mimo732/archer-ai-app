@@ -9,6 +9,8 @@ import android.os.Bundle;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.widget.Toast;
 
 import androidx.security.crypto.EncryptedSharedPreferences;
@@ -375,6 +377,80 @@ public class ArcherBridgePlugin extends Plugin {
             } catch (Exception ignored) {}
             speechRecognizer = null;
         }
+    }
+
+    @PluginMethod
+    public void speakText(PluginCall call) {
+        final String text = call.getString("text", "").trim();
+        final String language = call.getString("language", "fr-FR").trim();
+        if (text.isEmpty()) {
+            call.reject("Texte vocal vide");
+            return;
+        }
+
+        getActivity().runOnUiThread(() -> {
+            final TextToSpeech[] engine = new TextToSpeech[1];
+            engine[0] = new TextToSpeech(getContext(), status -> {
+                TextToSpeech tts = engine[0];
+                if (tts == null || status != TextToSpeech.SUCCESS) {
+                    call.reject("Synthèse vocale Android indisponible");
+                    if (tts != null) tts.shutdown();
+                    return;
+                }
+
+                Locale locale = Locale.FRANCE;
+                try {
+                    String normalized = language.replace('_', '-');
+                    String[] parts = normalized.split("-");
+                    if (parts.length >= 2) {
+                        locale = new Locale(parts[0], parts[1]);
+                    } else if (parts.length == 1 && !parts[0].isEmpty()) {
+                        locale = new Locale(parts[0]);
+                    }
+                } catch (Exception ignored) {}
+
+                int langResult = tts.setLanguage(locale);
+                if (langResult == TextToSpeech.LANG_MISSING_DATA ||
+                        langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    tts.setLanguage(Locale.FRANCE);
+                }
+
+                tts.setSpeechRate(1.0f);
+                tts.setPitch(1.0f);
+
+                final String utteranceId = "jarvis-" + System.nanoTime();
+                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override public void onStart(String id) {}
+
+                    @Override
+                    public void onDone(String id) {
+                        if (!utteranceId.equals(id)) return;
+                        tts.shutdown();
+                        JSObject out = new JSObject();
+                        out.put("spoken", true);
+                        call.resolve(out);
+                    }
+
+                    @Override
+                    public void onError(String id) {
+                        if (!utteranceId.equals(id)) return;
+                        tts.shutdown();
+                        call.reject("Erreur de synthèse vocale");
+                    }
+
+                    @Override
+                    public void onError(String id, int errorCode) {
+                        onError(id);
+                    }
+                });
+
+                int result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+                if (result == TextToSpeech.ERROR) {
+                    tts.shutdown();
+                    call.reject("Impossible de lancer la synthèse vocale");
+                }
+            });
+        });
     }
 
     @PluginMethod
