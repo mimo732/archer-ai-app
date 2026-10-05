@@ -591,7 +591,10 @@
       ? "Donne-moi l’adresse complète…"
       : "Je t’écoute…");
     try {
-      const out = await b.listen({ language: "fr-FR" });
+      const out = await b.listen({
+        language: "fr-FR",
+        mode: pendingAction && pendingAction.type === "maps_destination" ? "address" : "command"
+      });
       const text = out && out.text ? String(out.text).trim() : "";
       if (text) {
         input.value = text;
